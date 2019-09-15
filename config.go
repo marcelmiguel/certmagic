@@ -47,6 +47,9 @@ type Config struct {
 	// Disable all HTTP challenges
 	DisableHTTPChallenge bool
 
+	// Disable create HTTP serve on poort 80
+	DisableHTTPServer bool
+
 	// Disable all TLS-ALPN challenges
 	DisableTLSALPNChallenge bool
 

@@ -83,16 +83,20 @@ func HTTPS(domainNames []string, mux http.Handler) error {
 	// and clean them up when all servers are done
 	lnMu.Lock()
 	if httpLn == nil && httpsLn == nil {
-		httpLn, err = net.Listen("tcp", fmt.Sprintf(":%d", HTTPPort))
-		if err != nil {
-			lnMu.Unlock()
-			return err
+		if !Default.DisableHTTPServer {
+			httpLn, err = net.Listen("tcp", fmt.Sprintf(":%d", HTTPPort))
+			if err != nil {
+				lnMu.Unlock()
+				return err
+			}
 		}
 
 		httpsLn, err = tls.Listen("tcp", fmt.Sprintf(":%d", HTTPSPort), cfg.TLSConfig())
 		if err != nil {
-			httpLn.Close()
-			httpLn = nil
+			if httpLn != nil {
+				httpLn.Close()
+				httpLn = nil
+			}
 			lnMu.Unlock()
 			return err
 		}
@@ -114,13 +118,20 @@ func HTTPS(domainNames []string, mux http.Handler) error {
 	// challenge and issues redirects to HTTPS,
 	// while the HTTPS server simply serves the
 	// user's handler)
-	httpServer := &http.Server{
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
-		IdleTimeout:       5 * time.Second,
-		Handler:           cfg.HTTPChallengeHandler(http.HandlerFunc(httpRedirectHandler)),
+	if !Default.DisableHTTPServer {
+		httpServer := &http.Server{
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      5 * time.Second,
+			IdleTimeout:       5 * time.Second,
+			Handler:           cfg.HTTPChallengeHandler(http.HandlerFunc(httpRedirectHandler)),
+		}
+		log.Printf("%v Serving HTTP->HTTPS on %s and %s",
+			domainNames, hln.Addr(), hsln.Addr())
+
+		go httpServer.Serve(hln)
 	}
+
 	httpsServer := &http.Server{
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -129,10 +140,6 @@ func HTTPS(domainNames []string, mux http.Handler) error {
 		Handler:           mux,
 	}
 
-	log.Printf("%v Serving HTTP->HTTPS on %s and %s",
-		domainNames, hln.Addr(), hsln.Addr())
-
-	go httpServer.Serve(hln)
 	return httpsServer.Serve(hsln)
 }
 
