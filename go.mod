@@ -1,4 +1,4 @@
-module github.com/mholt/certmagic
+module github.com/marcelmiguel/certmagic
 
 go 1.13
 
